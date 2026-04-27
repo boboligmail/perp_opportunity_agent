@@ -2,6 +2,7 @@
 import argparse
 import json
 import math
+import os
 import statistics
 import time
 from dataclasses import asdict, dataclass
@@ -10,10 +11,12 @@ from pathlib import Path
 from typing import Any
 
 import requests
+from env_utils import load_env_file
 
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+load_env_file(BASE_DIR / ".env")
 
 LATEST_RUN_PATH = DATA_DIR / "latest_run.json"
 PAPER_POSITIONS_PATH = DATA_DIR / "paper_positions.json"
@@ -30,21 +33,21 @@ HEADERS = {
     "Referer": "https://www.binance.com/en/square",
 }
 
-TOTAL_EQUITY = 100.0
-LIVE_LEVERAGE = 3.0
-LIVE_MARGIN_MAX = 15.0
+TOTAL_EQUITY = float(os.getenv("TOTAL_EQUITY", "100"))
+LIVE_LEVERAGE = float(os.getenv("LIVE_LEVERAGE", "3"))
+LIVE_MARGIN_MAX = float(os.getenv("LIVE_MARGIN_MAX", "15"))
 LIVE_NOTIONAL_MAX = LIVE_MARGIN_MAX * LIVE_LEVERAGE
-LIVE_RISK_USD = 2.0
+LIVE_RISK_USD = float(os.getenv("LIVE_RISK_USD", "2"))
 
-MIN_QUOTE_VOL = 10_000_000.0
-MIN_TRADE_COUNT = 20_000
-MIN_OI_USD = 5_000_000.0
-SHORTLIST_VOL_TOP = 45
-SHORTLIST_MOVE_TOP = 25
-SOCIAL_CHECK_TOP = 25
-PAPER_SIGNAL_THRESHOLD = 55
-LIVE_SIGNAL_THRESHOLD = 72
-MAX_HEAT_SCORE = 100
+MIN_QUOTE_VOL = float(os.getenv("MIN_QUOTE_VOL", "10000000"))
+MIN_TRADE_COUNT = int(os.getenv("MIN_TRADE_COUNT", "20000"))
+MIN_OI_USD = float(os.getenv("MIN_OI_USD", "5000000"))
+SHORTLIST_VOL_TOP = int(os.getenv("SHORTLIST_VOL_TOP", "45"))
+SHORTLIST_MOVE_TOP = int(os.getenv("SHORTLIST_MOVE_TOP", "25"))
+SOCIAL_CHECK_TOP = int(os.getenv("SOCIAL_CHECK_TOP", "25"))
+PAPER_SIGNAL_THRESHOLD = float(os.getenv("PAPER_SIGNAL_THRESHOLD", "55"))
+LIVE_SIGNAL_THRESHOLD = float(os.getenv("LIVE_SIGNAL_THRESHOLD", "72"))
+MAX_HEAT_SCORE = float(os.getenv("MAX_HEAT_SCORE", "100"))
 
 
 @dataclass

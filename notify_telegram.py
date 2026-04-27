@@ -6,17 +6,17 @@ from pathlib import Path
 from typing import Any
 
 import requests
+from env_utils import load_env_file
 
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+load_env_file(BASE_DIR / ".env")
 
 LATEST_RUN_PATH = DATA_DIR / "latest_run.json"
 ALPHA_WATCHLIST_PATH = DATA_DIR / "alpha_watchlist.json"
 STATE_PATH = DATA_DIR / "notify_state.json"
 
-TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN", "")
-TG_CHAT_ID = os.getenv("TG_CHAT_ID", "")
 TG_API_TEMPLATE = "https://api.telegram.org/bot{token}/sendMessage"
 
 
@@ -44,23 +44,26 @@ def normalize_live_plans(plans: list[dict[str, Any]]) -> list[str]:
 
 
 def send_telegram(text: str, dry_run: bool = False) -> bool:
+    tg_bot_token = os.getenv("TG_BOT_TOKEN", "")
+    tg_chat_id = os.getenv("TG_CHAT_ID", "")
+
     if dry_run:
         print("[dry-run] would send:\n")
         print(text)
         return True
 
-    if not TG_BOT_TOKEN or not TG_CHAT_ID:
+    if not tg_bot_token or not tg_chat_id:
         print("[skip] TG_BOT_TOKEN or TG_CHAT_ID is not set")
         return False
 
-    url = TG_API_TEMPLATE.format(token=TG_BOT_TOKEN)
+    url = TG_API_TEMPLATE.format(token=tg_bot_token)
     chunks = [text[i:i + 3900] for i in range(0, len(text), 3900)]
     ok = True
     for chunk in chunks:
         response = requests.post(
             url,
             json={
-                "chat_id": TG_CHAT_ID,
+                "chat_id": tg_chat_id,
                 "text": chunk,
                 "parse_mode": "Markdown",
             },

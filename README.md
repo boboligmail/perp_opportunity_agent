@@ -1,61 +1,56 @@
 # Perp Opportunity Agent
 
-面向 Binance USDT 永续合约的最小可运行机会雷达。
-
-## 这套东西做什么
-
-- 只扫描 Binance USDT 永续合约
-- 结合市场阶段、Binance Square 热度、CoinGecko Trending、Funding、Open Interest 和短周期结构
-- `live` 只保留强信号建议
-- `paper` 会对所有达到基线阈值的有效 setup 开模拟仓，持续积累样本
-- 暂时不自动下单
-- 暂时不做空
+面向 Binance USDT 永续合约的机会扫描、风险过滤、执行建议与样本验证工具。
 
 ## 账户假设
-
 - 总本金：`100U`
 - 最大杠杆：`3x`
 - 强信号最大保证金：`15U`
 - 强信号最大名义仓位：`45U`
-- 单笔真实建议最大风险：`2U`
+- 单笔风险预算：`2U`
 
-说明：
+## 项目结构
+- `perp_opportunity_agent.py`：核心扫描 + paper 持仓更新
+- `calibrate_parameters.py`：参数校准脚手架（网格扫描）
+- `run_pipeline.py`：统一调度入口（单轮/循环）
+- `run_scanner_loop.py`：旧版循环扫描器（保留）
+- `alpha_event_watchlist.py`：Binance 公告事件观察
+- `analyze_paper_trades.py`：paper 统计分析
+- `notify_telegram.py`：变化触发式 Telegram 推送
+- `env_utils.py`：`.env` 参数加载
+- `SPEC.md`：中文策略规格
+- `CHANGELOG.md`：版本记录
+- `PROCESS_FLOW.md`：流程图与当前进度
 
-- `15U` 不是每笔都必须这么下，而是当前的强信号上限
-- 如果按 ATR 推导出来的止损距离，会让 `45U` 名义仓位的预估亏损超过 `2U`，该信号会自动降级为观察
-
-## 文件结构
-
-- `perp_opportunity_agent.py`：单次扫描 + 模拟持仓更新
-- `run_scanner_loop.py`：循环扫描器
-- `analyze_paper_trades.py`：模拟交易统计脚本
-- `alpha_event_watchlist.py`：Binance 公告事件观察侧边模块
-- `notify_telegram.py`：变化触发式 Telegram 通知器（强信号/平仓/阶段切换/新事件）
-- `SPEC.md`：中文策略规格文档
-- `CHANGELOG.md`：中文版本记录
-- `PROCESS_FLOW.md`：流程图与当前进度标记
-- `data/latest_run.json`：最近一次完整扫描结果
-- `data/scan_history.jsonl`：扫描历史快照
-- `data/paper_positions.json`：当前模拟持仓
-- `data/paper_trades.jsonl`：模拟平仓记录
-- `data/paper_stats_report.md`：模拟统计摘要
-- `data/alpha_watchlist.json`：事件观察列表
-- `data/notify_state.json`：通知状态快照（用于去重）
-
-## 使用方式
-
+## 快速开始
+1. 复制参数模板并填写：
 ```bash
-python perp_opportunity_agent.py
-python run_scanner_loop.py --interval-seconds 900
-python run_scanner_loop.py --interval-seconds 900 --max-runs 4
-python analyze_paper_trades.py
-python alpha_event_watchlist.py
-python notify_telegram.py --dry-run
+copy .env.example .env
+```
+2. 本地单轮联调（不发真实通知）：
+```bash
+python run_pipeline.py --dry-run
+```
+3. 循环扫描（每 15 分钟）：
+```bash
+python run_pipeline.py --interval-seconds 900 --dry-run
 ```
 
-## 当前设计取舍
+## 常用命令
+```bash
+python perp_opportunity_agent.py
+python alpha_event_watchlist.py
+python analyze_paper_trades.py
+python calibrate_parameters.py
+python notify_telegram.py --dry-run
+python run_pipeline.py --dry-run
+python run_pipeline.py --interval-seconds 900 --dry-run
+```
 
-- `s3_accumulation_radar.py` 的思路主要映射到热度发现层和市场发现层
-- `s2_oi_funding_rate_scanner.py` 的思路主要映射到衍生品确认层
-- `s1_binance_alpha_monitor.py` 已先简化接入为 `alpha_event_watchlist.py`，当前作为事件侧边观察模块运行，暂不直接参与主打分
-- 推送层目前采用“变化触发式通知”，避免每轮扫描都刷屏
+## 参数配置（.env）
+关键可配置项：
+- 账户与风险：`TOTAL_EQUITY`、`LIVE_LEVERAGE`、`LIVE_MARGIN_MAX`、`LIVE_RISK_USD`
+- 市场过滤：`MIN_QUOTE_VOL`、`MIN_TRADE_COUNT`、`MIN_OI_USD`
+- 候选范围：`SHORTLIST_VOL_TOP`、`SHORTLIST_MOVE_TOP`、`SOCIAL_CHECK_TOP`
+- 信号阈值：`PAPER_SIGNAL_THRESHOLD`、`LIVE_SIGNAL_THRESHOLD`、`MAX_HEAT_SCORE`
+- 推送参数：`TG_BOT_TOKEN`、`TG_CHAT_ID`

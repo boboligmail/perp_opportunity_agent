@@ -1,189 +1,85 @@
-# 规格文档：Binance 合约机会雷达 Agent v0.2
+# 规格文档：Perp Opportunity Agent（Binance 合约）
 
 ## 1. 目标
+构建一套面向 Binance USDT 永续合约的机会扫描与执行建议系统，用 `100U` 小资金验证策略有效性。
 
-做一套面向 Binance USDT 永续合约的研究和执行辅助系统，服务于 `100U` 小本金验证。
-
-这不是“找百倍币”的机器，而是：
-
+系统定位：
 - 高波动机会雷达
 - 风险过滤器
-- 交易执行建议器
-- 模拟样本生成器
+- 执行建议器
+- Paper 样本生成器
 
-## 2. 这次对话确定下来的约束
+## 2. 交易边界
+- 交易标的：Binance USDT 永续合约（非现货）
+- 本金：`100U`
+- 最大杠杆：`3x`
+- 强信号最大保证金：`15U`
+- 强信号最大名义仓位：`45U`
+- 单笔最大风险预算：`2U`
 
-- 交易场景：Binance 永续合约，不是现货
-- 真实本金：`100U`
-- 真实动作：只做强信号
-- 普通信号：只观察，不真实开仓
-- 研究验证：所有达到基线阈值的有效 setup 都要在 paper 模式开仓
-- 额外信号源：Binance Square 社媒热度 + CoinGecko 搜索热度
-- 杠杆上限：`3x`
+执行原则：
+- 真实建议只看强信号
+- 普通信号仅观察
+- Paper 对有效 setup 进行全量模拟，以积累统计样本
 
-## 3. 产品决策
+## 3. 策略结构
+### 3.1 机会发现层（Opportunity）
+- 24h 涨幅、成交活跃度、短周期动量、结构突破
+- 社媒热度（Binance Square）和搜索热度（CoinGecko Trending）
 
-### 3.1 Live 层
+### 3.2 衍生品确认层（Derivatives）
+- Funding（是否拥挤）
+- OI 1h / 6h 变化（是否有资金推动）
+- 结合价格结构确认“趋势跟随”与“挤压反转”
 
-只有强信号才允许生成真实交易建议。
+### 3.3 风险惩罚层（Risk Penalty）
+- 过热（heat score）
+- 单根拉爆与冲高回落风险
+- ATR 过宽导致风险超预算
 
-当前真实建议的上限配置：
+### 3.4 执行层（Execution）
+- 输出动作：`breakout_follow` / `wait_pullback` / `small_probe` / `observe`
+- 当前 setup：`breakout_long` / `squeeze_long` / `avoid`
 
-- 杠杆：`3x`
-- 保证金：`15U`
-- 最大名义仓位：`45U`
-- 单笔最大风险：`2U`
+## 4. 数据产物
+- `data/latest_run.json`：最新扫描快照
+- `data/scan_history.jsonl`：历史扫描摘要
+- `data/paper_positions.json`：当前 paper 持仓
+- `data/paper_trades.jsonl`：paper 平仓记录
+- `data/paper_stats_report.md`：paper 统计
+- `data/alpha_watchlist.json`：事件观察清单
 
-如果 ATR 推导的止损距离，会让这笔 `45U` 名义仓位的预估亏损超过 `2U`，则该信号自动降级为 `observe`。
+## 5. 模块清单
+- `perp_opportunity_agent.py`：核心扫描与 paper 记账
+- `alpha_event_watchlist.py`：公告/事件观察
+- `analyze_paper_trades.py`：paper 统计分析
+- `notify_telegram.py`：变化触发推送
+- `run_scanner_loop.py`：历史循环扫描器
 
-### 3.2 Paper 层
+## 6. v0.5 新增（本次）
+### 6.1 参数校准脚手架
+- 新增 `calibrate_parameters.py`
+- 基于 `paper_trades.jsonl` 做阈值网格扫描：
+- `PAPER_SIGNAL_THRESHOLD`
+- `LIVE_SIGNAL_THRESHOLD`
+- `MAX_HEAT_SCORE`
+- 输出：
+- `data/calibration_report.json`
+- `data/calibration_report.md`
 
-所有达到基线阈值、且 setup 合法的信号，都进入 paper 模拟开仓：
+### 6.2 统一调度脚本
+- 新增 `run_pipeline.py`
+- 默认串联流程：
+- `scan -> calibrate -> alpha -> analyze -> notify`
+- 支持循环调度：`--interval-seconds`、`--max-runs`
+- 支持灰度验证：`--dry-run`、`--skip-*`
 
-- `score >= 55`
-- `setup_type in {breakout_long, squeeze_long}`
+### 6.3 参数外置
+- 新增 `env_utils.py`
+- 新增 `.env.example` 与本地 `.env`
+- 关键风险与阈值参数改为 `.env` 覆盖（保留默认值）
 
-Paper 层的目的不是赚钱，而是积累足够样本，观察：
-
-- 胜率
-- 平均收益
-- 市场阶段敏感度
-- setup 类型差异
-- 分数区间差异
-
-## 4. 策略架构
-
-### 4.1 市场阶段引擎
-
-输入：
-
-- BTC 24h 涨跌
-- ETH 24h 涨跌
-- Top50 合约上涨占比
-- Top50 平均涨跌
-- Top50 平均 Funding
-
-输出：
-
-- `trend_up`
-- `rotation`
-- `trend_down`
-- `chaos`
-
-### 4.2 发现层
-
-目的：
-
-- 找出“值得看”的合约，而不是直接下单
-
-主要输入：
-
-- 24h quote volume
-- 24h trade count
-- 短周期动量
-- 突破结构
-- Binance Square 话题热度
-- CoinGecko Trending 标记
-
-### 4.3 确认层
-
-目的：
-
-- 防止“只有热度，没有结构”的垃圾信号进入交易候选
-
-主要输入：
-
-- OI 1h / 6h 扩张
-- Funding 是否为负
-- ATR 对应的结构空间
-- 冲高回落上影
-- 单根拉爆风险
-
-### 4.4 执行层
-
-输出动作：
-
-- `breakout_follow`
-- `wait_pullback`
-- `small_probe`
-- `observe`
-
-当前 setup 类型：
-
-- `breakout_long`
-- `squeeze_long`
-- `avoid`
-
-## 5. 当前版本范围
-
-### v0.1
-
-- 单次扫描器
-- 热度 + 市场 + 衍生品打分
-- 模拟持仓与平仓日志
-
-### v0.2
-
-- 循环扫描器
-- 扫描历史快照
-- 模拟交易统计脚本
-- 中文文档、版本记录和流程图
-
-### v0.3
-
-- 新增 Binance 公告事件观察侧边模块
-- 将 `s1_binance_alpha_monitor.py` 的能力先以轻量 watchlist 方式接入
-- 保持事件模块与主交易触发链路解耦，避免公告噪音直接污染主评分
-
-### v0.4
-
-- 新增变化触发式 Telegram 推送模块
-- 通知条件：新强信号 / 新平仓 / 市场阶段切换 / 新事件观察项
-- 引入通知状态快照，避免重复提醒和刷屏
-
-## 6. 为什么这些阈值不是“真理”
-
-本次讨论已经明确：
-
-- 动量、流动性、OI、量能确认，这些属于原则层选择，是有市场结构逻辑支撑的
-- 具体阈值不是普世真理，而是工程化先验，后续必须靠样本和历史验证继续校准
-
-所以 v0.2 的定位不是“参数最终版”，而是“先把规则显式化、把日志跑起来、把复盘入口搭起来”。
-
-## 7. 当前新增模块：事件侧边观察
-
-事件模块当前职责：
-
-- 扫描 Binance 公告
-- 过滤与 Alpha、Airdrop、TGE、Wallet、Will List 等相关内容
-- 生成高优先级观察列表
-- 为后续“事件驱动 + 合约跟踪”的组合策略预留接口
-
-当前不做的事：
-
-- 不直接改动主扫描器评分
-- 不自动变成交易信号
-- 不直接触发真实下单建议
-
-这样做的原因是：事件流适合“先看”，不适合未经结构确认就“直接打”。
-
-## 8. 当前新增模块：推送通道
-
-推送模块当前职责：
-
-- 比较当前快照与上次通知状态
-- 仅在关键变化发生时触发通知
-- 对 strong signal、paper closed、regime change、alpha new item 进行统一摘要
-
-推送模块当前边界：
-
-- 不做下单
-- 不改写主评分
-- 不替代回测和人工决策
-
-## 9. 下一步建议
-
-- 将事件模块和推送模块接入统一调度（单次任务内串联 scanner -> event -> notify）
-- 对阈值做历史校准
-- 多头稳定后再考虑空头策略
-- 只有在 paper 样本足够后，才讨论真实下单执行
+## 7. 下一步
+- 累积至少 80~150 笔 paper 样本后再做第二轮阈值收敛
+- 加入按市场阶段分组的参数集（trend_up / rotation / chaos）
+- 在强信号稳定后，再考虑小规模真实执行联动
