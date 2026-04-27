@@ -29,6 +29,7 @@
 - `perp_opportunity_agent.py`：单次扫描 + 模拟持仓更新
 - `run_scanner_loop.py`：循环扫描器
 - `analyze_paper_trades.py`：模拟交易统计脚本
+- `alpha_event_watchlist.py`：Binance 公告事件观察侧边模块
 - `SPEC.md`：中文策略规格文档
 - `CHANGELOG.md`：中文版本记录
 - `PROCESS_FLOW.md`：流程图与当前进度标记
@@ -37,6 +38,7 @@
 - `data/paper_positions.json`：当前模拟持仓
 - `data/paper_trades.jsonl`：模拟平仓记录
 - `data/paper_stats_report.md`：模拟统计摘要
+- `data/alpha_watchlist.json`：事件观察列表
 
 ## 使用方式
 
@@ -45,10 +47,11 @@ python perp_opportunity_agent.py
 python run_scanner_loop.py --interval-seconds 900
 python run_scanner_loop.py --interval-seconds 900 --max-runs 4
 python analyze_paper_trades.py
+python alpha_event_watchlist.py
 ```
 
 ## 当前设计取舍
 
 - `s3_accumulation_radar.py` 的思路主要映射到热度发现层和市场发现层
 - `s2_oi_funding_rate_scanner.py` 的思路主要映射到衍生品确认层
-- `s1_binance_alpha_monitor.py` 暂时不进入主触发链路，后续作为事件侧边观察模块接入
+- `s1_binance_alpha_monitor.py` 已先简化接入为 `alpha_event_watchlist.py`，当前作为事件侧边观察模块运行，暂不直接参与主打分
