@@ -1,5 +1,12 @@
 # 版本记录
 
+## v0.4.0 - 2026-04-27
+
+- 新增 `notify_telegram.py`，用于变化触发式通知
+- 通知条件覆盖：新强信号、新平仓、市场阶段切换、新事件观察项
+- 新增 `data/notify_state.json` 状态快照，避免重复推送
+- 更新中文 `README.md`、`SPEC.md` 和 `PROCESS_FLOW.md`
+
 ## v0.3.0 - 2026-04-27
 
 - 新增 `alpha_event_watchlist.py`，用于扫描 Binance 公告并生成事件观察列表

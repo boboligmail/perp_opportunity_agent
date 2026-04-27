@@ -30,6 +30,7 @@
 - `run_scanner_loop.py`：循环扫描器
 - `analyze_paper_trades.py`：模拟交易统计脚本
 - `alpha_event_watchlist.py`：Binance 公告事件观察侧边模块
+- `notify_telegram.py`：变化触发式 Telegram 通知器（强信号/平仓/阶段切换/新事件）
 - `SPEC.md`：中文策略规格文档
 - `CHANGELOG.md`：中文版本记录
 - `PROCESS_FLOW.md`：流程图与当前进度标记
@@ -39,6 +40,7 @@
 - `data/paper_trades.jsonl`：模拟平仓记录
 - `data/paper_stats_report.md`：模拟统计摘要
 - `data/alpha_watchlist.json`：事件观察列表
+- `data/notify_state.json`：通知状态快照（用于去重）
 
 ## 使用方式
 
@@ -48,6 +50,7 @@ python run_scanner_loop.py --interval-seconds 900
 python run_scanner_loop.py --interval-seconds 900 --max-runs 4
 python analyze_paper_trades.py
 python alpha_event_watchlist.py
+python notify_telegram.py --dry-run
 ```
 
 ## 当前设计取舍
@@ -55,3 +58,4 @@ python alpha_event_watchlist.py
 - `s3_accumulation_radar.py` 的思路主要映射到热度发现层和市场发现层
 - `s2_oi_funding_rate_scanner.py` 的思路主要映射到衍生品确认层
 - `s1_binance_alpha_monitor.py` 已先简化接入为 `alpha_event_watchlist.py`，当前作为事件侧边观察模块运行，暂不直接参与主打分
+- 推送层目前采用“变化触发式通知”，避免每轮扫描都刷屏
