@@ -44,9 +44,12 @@ MIN_TRADE_COUNT = int(os.getenv("MIN_TRADE_COUNT", "20000"))
 MIN_OI_USD = float(os.getenv("MIN_OI_USD", "5000000"))
 SHORTLIST_VOL_TOP = int(os.getenv("SHORTLIST_VOL_TOP", "45"))
 SHORTLIST_MOVE_TOP = int(os.getenv("SHORTLIST_MOVE_TOP", "25"))
+SHORTLIST_ACTIVITY_TOP = int(os.getenv("SHORTLIST_ACTIVITY_TOP", "35"))
+SHORTLIST_EARLY_TOP = int(os.getenv("SHORTLIST_EARLY_TOP", "35"))
 SOCIAL_CHECK_TOP = int(os.getenv("SOCIAL_CHECK_TOP", "25"))
 PAPER_SIGNAL_THRESHOLD = float(os.getenv("PAPER_SIGNAL_THRESHOLD", "55"))
 LIVE_SIGNAL_THRESHOLD = float(os.getenv("LIVE_SIGNAL_THRESHOLD", "72"))
+CHAOS_PROBE_THRESHOLD = float(os.getenv("CHAOS_PROBE_THRESHOLD", "62"))
 MAX_HEAT_SCORE = float(os.getenv("MAX_HEAT_SCORE", "100"))
 
 
@@ -229,10 +232,25 @@ def shortlist_symbols(universe: dict[str, dict[str, Any]], tickers: dict[str, di
         if symbol in universe and data["quote_volume"] >= MIN_QUOTE_VOL and data["trade_count"] >= MIN_TRADE_COUNT
     ]
     top_volume = sorted(filtered, key=lambda item: item[1]["quote_volume"], reverse=True)[:SHORTLIST_VOL_TOP]
+    top_activity = sorted(filtered, key=lambda item: item[1]["trade_count"], reverse=True)[:SHORTLIST_ACTIVITY_TOP]
+    early_band = [
+        (symbol, data)
+        for symbol, data in filtered
+        if 1.5 <= data["px_chg_24h"] <= 22
+    ]
+    early_candidates = sorted(
+        early_band,
+        key=lambda item: (
+            item[1]["quote_volume"],
+            item[1]["trade_count"],
+            -abs(item[1]["px_chg_24h"] - 8.0),
+        ),
+        reverse=True,
+    )[:SHORTLIST_EARLY_TOP]
     top_moves = sorted(filtered, key=lambda item: item[1]["px_chg_24h"], reverse=True)[:SHORTLIST_MOVE_TOP]
     merged: list[str] = []
     seen = set()
-    for symbol, _ in top_volume + top_moves:
+    for symbol, _ in top_volume + top_activity + early_candidates + top_moves:
         if symbol not in seen:
             merged.append(symbol)
             seen.add(symbol)
@@ -407,6 +425,9 @@ def build_signals() -> tuple[list[Signal], dict[str, Any]]:
         if ticker["trade_count"] < 40_000:
             penalty += 6
             risks.append("Trade count is still thin")
+        if ticker["px_chg_24h"] > 28:
+            penalty += 10
+            risks.append("24h extension is already large")
         if metrics["body_pct_15m"] >= 4 and metrics["vol_1h_ratio"] >= 3.5:
             penalty += 12
             risks.append("Recent candle looks like a blow-off spike")
@@ -448,6 +469,19 @@ def build_signals() -> tuple[list[Signal], dict[str, Any]]:
         elif regime in {"trend_up", "rotation"} and funding_pct < 0 and oi_1h > 1 and oi_6h > 3 and ticker["px_chg_24h"] > 2:
             setup_type = "squeeze_long"
             action = "small_probe" if total_score >= PAPER_SIGNAL_THRESHOLD else "observe"
+        elif (
+            regime in {"chaos", "rotation"}
+            and 0.5 <= ticker["px_chg_24h"] <= 32
+            and metrics["vol_1h_ratio"] >= 1.0
+            and oi_1h >= 0.0
+            and oi_6h >= 1.5
+            and funding_pct <= 0.2
+        ):
+            setup_type = "chaos_probe_long"
+            if total_score >= CHAOS_PROBE_THRESHOLD:
+                action = "wait_pullback" if overheated else "small_probe"
+            else:
+                action = "observe"
 
         stop_pct = clamp(metrics["atr_pct"] * 1.35, 1.2, 4.4)
         risk_if_live = LIVE_NOTIONAL_MAX * (stop_pct / 100.0)
@@ -567,7 +601,7 @@ def update_paper_book(signals: list[Signal]) -> dict[str, Any]:
     for signal in signals:
         if signal.total_score < PAPER_SIGNAL_THRESHOLD:
             continue
-        if signal.setup_type not in {"breakout_long", "squeeze_long"}:
+        if signal.setup_type not in {"breakout_long", "squeeze_long", "chaos_probe_long"}:
             continue
         if signal.symbol in open_by_symbol:
             continue
