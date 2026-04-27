@@ -1,41 +1,44 @@
 # Perp Opportunity Agent
 
-Minimal working scanner for Binance USDT perpetual futures.
+面向 Binance USDT 永续合约的最小可运行机会雷达。
 
-## What it does
+## 这套东西做什么
 
-- Scans Binance USDT perpetual contracts only
-- Uses market regime, Binance Square heat, CoinGecko trending, funding, open interest, and short-term structure
-- Keeps `live` recommendations limited to strong signals only
-- Opens `paper` positions for all baseline-qualified setups to build a sample set
-- Does not place real orders yet
-- Does not short yet
+- 只扫描 Binance USDT 永续合约
+- 结合市场阶段、Binance Square 热度、CoinGecko Trending、Funding、Open Interest 和短周期结构
+- `live` 只保留强信号建议
+- `paper` 会对所有达到基线阈值的有效 setup 开模拟仓，持续积累样本
+- 暂时不自动下单
+- 暂时不做空
 
-## Account assumptions
+## 账户假设
 
-- Total equity: `100U`
-- Max leverage: `3x`
-- Max strong-signal margin: `15U`
-- Max strong-signal notional: `45U`
-- Max risk per real trade plan: `2U`
+- 总本金：`100U`
+- 最大杠杆：`3x`
+- 强信号最大保证金：`15U`
+- 强信号最大名义仓位：`45U`
+- 单笔真实建议最大风险：`2U`
 
-Important:
+说明：
 
-- `15U` is not a mandatory fixed size for every real trade, it is the current ceiling
-- If ATR-implied stop distance would make `45U` notional risk exceed `2U`, the signal is downgraded to observation
+- `15U` 不是每笔都必须这么下，而是当前的强信号上限
+- 如果按 ATR 推导出来的止损距离，会让 `45U` 名义仓位的预估亏损超过 `2U`，该信号会自动降级为观察
 
-## Files
+## 文件结构
 
-- `perp_opportunity_agent.py`: one-shot scanner and paper-book updater
-- `run_scanner_loop.py`: loop runner for repeated scans
-- `analyze_paper_trades.py`: stats report generator for the paper log
-- `data/latest_run.json`: latest full scan result
-- `data/scan_history.jsonl`: rolling scan history snapshots
-- `data/paper_positions.json`: current paper positions
-- `data/paper_trades.jsonl`: closed paper trades
-- `data/paper_stats_report.md`: generated paper stats summary
+- `perp_opportunity_agent.py`：单次扫描 + 模拟持仓更新
+- `run_scanner_loop.py`：循环扫描器
+- `analyze_paper_trades.py`：模拟交易统计脚本
+- `SPEC.md`：中文策略规格文档
+- `CHANGELOG.md`：中文版本记录
+- `PROCESS_FLOW.md`：流程图与当前进度标记
+- `data/latest_run.json`：最近一次完整扫描结果
+- `data/scan_history.jsonl`：扫描历史快照
+- `data/paper_positions.json`：当前模拟持仓
+- `data/paper_trades.jsonl`：模拟平仓记录
+- `data/paper_stats_report.md`：模拟统计摘要
 
-## Usage
+## 使用方式
 
 ```bash
 python perp_opportunity_agent.py
@@ -44,8 +47,8 @@ python run_scanner_loop.py --interval-seconds 900 --max-runs 4
 python analyze_paper_trades.py
 ```
 
-## Current scope choices
+## 当前设计取舍
 
-- `s3_accumulation_radar.py` logic is represented in the heat plus market discovery layer
-- `s2_oi_funding_rate_scanner.py` logic is represented in the derivatives confirmation layer
-- `s1_binance_alpha_monitor.py` stays outside the trigger path for now and is treated as a future event-watch sidecar
+- `s3_accumulation_radar.py` 的思路主要映射到热度发现层和市场发现层
+- `s2_oi_funding_rate_scanner.py` 的思路主要映射到衍生品确认层
+- `s1_binance_alpha_monitor.py` 暂时不进入主触发链路，后续作为事件侧边观察模块接入

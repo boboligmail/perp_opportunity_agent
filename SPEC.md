@@ -1,147 +1,147 @@
-# Spec: Binance Perp Opportunity Agent v0.2
+# 规格文档：Binance 合约机会雷达 Agent v0.2
 
-## Goal
+## 1. 目标
 
-Build a practical research-and-execution assistant for Binance USDT perpetual futures, optimized for a `100U` validation account.
+做一套面向 Binance USDT 永续合约的研究和执行辅助系统，服务于 `100U` 小本金验证。
 
-This is not a "find 100x coin" machine. It is a:
+这不是“找百倍币”的机器，而是：
 
-- high-volatility opportunity radar
-- risk filter
-- execution suggestion agent
-- paper-trade sample generator
+- 高波动机会雷达
+- 风险过滤器
+- 交易执行建议器
+- 模拟样本生成器
 
-## User constraints captured from discussion
+## 2. 这次对话确定下来的约束
 
-- Venue: Binance perpetual futures, not spot
-- Real capital: `100U`
-- Real action: strong signals only
-- Regular signals: observe only in live workflow
-- Research workflow: every baseline-qualified signal should still open in paper mode
-- Extra data inputs: Binance Square social heat and CoinGecko search heat
-- Keep leverage contained: max `3x`
+- 交易场景：Binance 永续合约，不是现货
+- 真实本金：`100U`
+- 真实动作：只做强信号
+- 普通信号：只观察，不真实开仓
+- 研究验证：所有达到基线阈值的有效 setup 都要在 paper 模式开仓
+- 额外信号源：Binance Square 社媒热度 + CoinGecko 搜索热度
+- 杠杆上限：`3x`
 
-## Product decision
+## 3. 产品决策
 
-### Live layer
+### 3.1 Live 层
 
-Only strong signals can produce a real trade plan.
+只有强信号才允许生成真实交易建议。
 
-Current live plan ceiling:
+当前真实建议的上限配置：
 
-- leverage: `3x`
-- margin: `15U`
-- max notional: `45U`
-- max risk: `2U`
+- 杠杆：`3x`
+- 保证金：`15U`
+- 最大名义仓位：`45U`
+- 单笔最大风险：`2U`
 
-If ATR-based stop distance makes the real-plan risk exceed `2U`, the signal is downgraded to `observe`.
+如果 ATR 推导的止损距离，会让这笔 `45U` 名义仓位的预估亏损超过 `2U`，则该信号自动降级为 `observe`。
 
-### Paper layer
+### 3.2 Paper 层
 
-All setups above the baseline signal threshold are opened as paper positions, as long as they are valid:
+所有达到基线阈值、且 setup 合法的信号，都进入 paper 模拟开仓：
 
 - `score >= 55`
 - `setup_type in {breakout_long, squeeze_long}`
 
-Paper positions are used to estimate:
+Paper 层的目的不是赚钱，而是积累足够样本，观察：
 
-- win rate
-- average pnl
-- regime sensitivity
-- setup-type edge
-- score-band edge
+- 胜率
+- 平均收益
+- 市场阶段敏感度
+- setup 类型差异
+- 分数区间差异
 
-## Strategy architecture
+## 4. 策略架构
 
-### 1. Regime engine
+### 4.1 市场阶段引擎
 
-Inputs:
+输入：
 
-- BTC 24h change
-- ETH 24h change
-- top-50 perp breadth
-- top-50 average change
-- top-50 average funding
+- BTC 24h 涨跌
+- ETH 24h 涨跌
+- Top50 合约上涨占比
+- Top50 平均涨跌
+- Top50 平均 Funding
 
-Outputs:
+输出：
 
 - `trend_up`
 - `rotation`
 - `trend_down`
 - `chaos`
 
-### 2. Discovery engine
+### 4.2 发现层
 
-Purpose:
+目的：
 
-- find contracts worth attention
+- 找出“值得看”的合约，而不是直接下单
 
-Main inputs:
+主要输入：
 
 - 24h quote volume
 - 24h trade count
-- short-term momentum
-- breakout structure
-- Binance Square hashtag attention
-- CoinGecko trending flag
+- 短周期动量
+- 突破结构
+- Binance Square 话题热度
+- CoinGecko Trending 标记
 
-### 3. Confirmation engine
+### 4.3 确认层
 
-Purpose:
+目的：
 
-- prevent social-only garbage signals from becoming trade candidates
+- 防止“只有热度，没有结构”的垃圾信号进入交易候选
 
-Main inputs:
+主要输入：
 
-- open interest 1h / 6h expansion
-- funding negativity
-- ATR-based structure
-- rejection wick
-- blow-off candle risk
+- OI 1h / 6h 扩张
+- Funding 是否为负
+- ATR 对应的结构空间
+- 冲高回落上影
+- 单根拉爆风险
 
-### 4. Execution engine
+### 4.4 执行层
 
-Outputs:
+输出动作：
 
 - `breakout_follow`
 - `wait_pullback`
 - `small_probe`
 - `observe`
 
-Current setup families:
+当前 setup 类型：
 
 - `breakout_long`
 - `squeeze_long`
 - `avoid`
 
-## Versioned scope
+## 5. 当前版本范围
 
 ### v0.1
 
-- one-shot scanner
-- social plus market plus derivatives scoring
-- paper positions and closed-trade log
+- 单次扫描器
+- 热度 + 市场 + 衍生品打分
+- 模拟持仓与平仓日志
 
 ### v0.2
 
-- loop scanner
-- scan history snapshots
-- paper trade stats report
-- repo-ready docs and changelog
+- 循环扫描器
+- 扫描历史快照
+- 模拟交易统计脚本
+- 中文文档、版本记录和流程图
 
-## Why these thresholds are treated as parameters, not truth
+## 6. 为什么这些阈值不是“真理”
 
-Discussion conclusion:
+本次讨论已经明确：
 
-- momentum, liquidity, open interest, and volume confirmation are principle-level choices with real market-structure support
-- exact cutoffs are engineering priors and should be calibrated over history
+- 动量、流动性、OI、量能确认，这些属于原则层选择，是有市场结构逻辑支撑的
+- 具体阈值不是普世真理，而是工程化先验，后续必须靠样本和历史验证继续校准
 
-So this version keeps explicit thresholds, but treats them as tuneable parameters rather than universal truth.
+所以 v0.2 的定位不是“参数最终版”，而是“先把规则显式化、把日志跑起来、把复盘入口搭起来”。
 
-## Future work
+## 7. 下一步建议
 
-- add event sidecar based on `s1_binance_alpha_monitor.py`
-- add Telegram or push delivery
-- add threshold calibration over historical data
-- add short-side mode after long-side validation is stable
-- add real order execution only after paper sample is large enough
+- 接入 `s1_binance_alpha_monitor.py`，作为事件观察侧边模块
+- 加 Telegram 或其他推送通道
+- 对阈值做历史校准
+- 多头稳定后再考虑空头策略
+- 只有在 paper 样本足够后，才讨论真实下单执行
